@@ -95,5 +95,90 @@ export class MCPLogger {
   }
 }
 
+// MCPリクエスト/レスポンスログのためのユーティリティ関数
+export interface MCPLogConfig {
+  maxDataLength?: number;
+  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+}
+
+const DEFAULT_LOG_CONFIG: MCPLogConfig = {
+  maxDataLength: 1000,
+  logLevel: (process.env.MCP_LOG_LEVEL as any) || 'info'
+};
+
+export function logMCPRequest(
+  handlerName: string, 
+  request: any, 
+  config: MCPLogConfig = DEFAULT_LOG_CONFIG
+) {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(2, 11);
+  
+  const truncatedRequest = truncateData(request, config.maxDataLength || 1000);
+  
+  mcpLogger.info(`[${requestId}] MCP Request: ${handlerName}`, {
+    requestId,
+    handler: handlerName,
+    timestamp: new Date().toISOString(),
+    request: truncatedRequest
+  });
+  
+  return { requestId, startTime };
+}
+
+export function logMCPResponse(
+  handlerName: string,
+  requestId: string,
+  startTime: number,
+  response: any,
+  error?: Error,
+  config: MCPLogConfig = DEFAULT_LOG_CONFIG
+) {
+  const endTime = Date.now();
+  const duration = endTime - startTime;
+  
+  if (error) {
+    mcpLogger.error(`[${requestId}] MCP Error: ${handlerName}`, {
+      requestId,
+      handler: handlerName,
+      duration: `${duration}ms`,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      }
+    });
+  } else {
+    const truncatedResponse = truncateData(response, config.maxDataLength || 1000);
+    
+    mcpLogger.info(`[${requestId}] MCP Response: ${handlerName}`, {
+      requestId,
+      handler: handlerName,
+      duration: `${duration}ms`,
+      response: truncatedResponse
+    });
+  }
+}
+
+function truncateData(data: any, maxLength: number): any {
+  if (typeof data === 'string') {
+    return data.length > maxLength ? data.substring(0, maxLength) + '...' : data;
+  }
+  
+  if (data === null || data === undefined) {
+    return data;
+  }
+  
+  try {
+    const jsonString = JSON.stringify(data, null, 2);
+    if (jsonString.length > maxLength) {
+      return JSON.stringify(data) + ' [TRUNCATED]';
+    }
+    return data;
+  } catch (error) {
+    return '[CANNOT_SERIALIZE]';
+  }
+}
+
 // グローバルなロガーインスタンス
 export const mcpLogger = new MCPLogger();
