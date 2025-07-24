@@ -14,7 +14,7 @@ import { calculatorTools, handleCalculatorTool } from './tools/calculator.js';
 import { staticResources, handleResourceRequest } from './resources/static.js';
 import { promptTemplates, handlePromptRequest } from './prompts/templates.js';
 import { handlePreprocessing, defaultPreprocessingConfig } from './prompts/preprocessing.js';
-import { mcpLogger } from './utils/logger.js';
+import { mcpLogger, logMCPRequest, logMCPResponse } from './utils/logger.js';
 
 class TestMCPServer {
   private server: Server;
@@ -39,59 +39,129 @@ class TestMCPServer {
   }
 
   private setupHandlers() {
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: calculatorTools
-      };
+    this.server.setRequestHandler(ListToolsRequestSchema, async (request) => {
+      const { requestId, startTime } = logMCPRequest('ListTools', request);
+      
+      try {
+        const response = {
+          tools: calculatorTools
+        };
+        
+        logMCPResponse('ListTools', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('ListTools', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+      const { requestId, startTime } = logMCPRequest('CallTool', request);
       
-      if (calculatorTools.some(tool => tool.name === name)) {
-        return await handleCalculatorTool(name, args);
+      try {
+        const { name, arguments: args } = request.params;
+        
+        if (calculatorTools.some(tool => tool.name === name)) {
+          const response = await handleCalculatorTool(name, args);
+          logMCPResponse('CallTool', requestId, startTime, response);
+          return response;
+        }
+        
+        throw new Error(`Tool not found: ${name}`);
+      } catch (error) {
+        logMCPResponse('CallTool', requestId, startTime, null, error as Error);
+        throw error;
       }
-      
-      throw new Error(`Tool not found: ${name}`);
     });
 
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return {
-        resources: staticResources
-      };
+    this.server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+      const { requestId, startTime } = logMCPRequest('ListResources', request);
+      
+      try {
+        const response = {
+          resources: staticResources
+        };
+        
+        logMCPResponse('ListResources', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('ListResources', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
 
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      const { uri } = request.params;
-      return await handleResourceRequest(uri);
+      const { requestId, startTime } = logMCPRequest('ReadResource', request);
+      
+      try {
+        const { uri } = request.params;
+        const response = await handleResourceRequest(uri);
+        
+        logMCPResponse('ReadResource', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('ReadResource', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
 
-    this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
-      return {
-        prompts: promptTemplates
-      };
+    this.server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
+      const { requestId, startTime } = logMCPRequest('ListPrompts', request);
+      
+      try {
+        const response = {
+          prompts: promptTemplates
+        };
+        
+        logMCPResponse('ListPrompts', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('ListPrompts', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
 
     this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-      return await handlePromptRequest(name, args || {});
+      const { requestId, startTime } = logMCPRequest('GetPrompt', request);
+      
+      try {
+        const { name, arguments: args } = request.params;
+        const response = await handlePromptRequest(name, args || {});
+        
+        logMCPResponse('GetPrompt', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('GetPrompt', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
 
     this.server.setRequestHandler(CreateMessageRequestSchema, async (request) => {
-      mcpLogger.info('Received sampling request');
+      const { requestId, startTime } = logMCPRequest('CreateMessage', request);
       
-      const processedRequest = await handlePreprocessing(request, defaultPreprocessingConfig);
-      
-      mcpLogger.info('Preprocessing completed', {
-        originalMessages: request.params.messages?.length || 0,
-        processedMessages: processedRequest.params.messages?.length || 0
-      });
-      
-      return {
-        model: processedRequest.params.model,
-        messages: processedRequest.params.messages,
-        ...processedRequest.params
-      };
+      try {
+        const processedRequest = await handlePreprocessing(request, defaultPreprocessingConfig);
+        
+        const response = {
+          model: processedRequest.params.model,
+          messages: processedRequest.params.messages,
+          ...processedRequest.params
+        };
+        
+        // 特別なログ情報を追加
+        mcpLogger.info(`[${requestId}] Preprocessing details`, {
+          requestId,
+          originalMessages: request.params.messages?.length || 0,
+          processedMessages: processedRequest.params.messages?.length || 0,
+          model: processedRequest.params.model
+        });
+        
+        logMCPResponse('CreateMessage', requestId, startTime, response);
+        return response;
+      } catch (error) {
+        logMCPResponse('CreateMessage', requestId, startTime, null, error as Error);
+        throw error;
+      }
     });
   }
 
