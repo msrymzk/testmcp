@@ -44,3 +44,6 @@ pids
 
 # Optional eslint cache
 .eslintcache
+
+# Claude Code settings
+**/.claude/settings.local.json
